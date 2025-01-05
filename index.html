@@ -1,0 +1,1907 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品图片批量上传系统</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            padding: 10px;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: calc(98vw - 700px);
+            margin: 0 auto 0 0;
+            margin-left: 20px;
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .upload-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .supplier-filter {
+            margin-bottom: 20px;
+        }
+
+        .supplier-filter select {
+            padding: 8px;
+            font-size: 16px;
+            min-width: 200px;
+        }
+
+        .image-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .image-item {
+            border: 1px solid #ddd;
+            padding: 6px;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            width: 100%;
+            min-width: 120px;
+        }
+
+        .image-item img {
+            width: 100%;
+            height: 120px;
+            object-fit: contain;
+            margin-bottom: 6px;
+        }
+
+        .image-item .info {
+            font-size: 12px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .image-item .info p {
+            margin: 0;
+            padding: 2px 0;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #eee;
+            font-size: 11px;
+        }
+
+        .image-item .info p span {
+            color: #666;
+        }
+
+        .image-item .info p span:last-child {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            margin-top: 10px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress {
+            width: 0%;
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .export-btn {
+            background-color: #2196F3;
+        }
+
+        .clear-btn {
+            background-color: #f44336;
+        }
+
+        .export-btn:hover {
+            background-color: #1976D2;
+        }
+
+        .clear-btn:hover {
+            background-color: #D32F2F;
+        }
+
+        .error {
+            color: red;
+            margin-top: 5px;
+        }
+
+        .edit-form {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            z-index: 1000;
+            width: 15vw;
+            min-width: 300px;
+            max-width: 400px;
+            height: auto;
+            max-height: 80vh;
+            display: none;
+        }
+
+        .edit-form.active {
+            display: block;
+            pointer-events: auto;
+        }
+
+        .edit-form .form-header {
+            position: sticky;
+            top: 0;
+            background: #1976D2;
+            z-index: 2;
+            padding: 15px 20px;
+            margin: -20px -20px 20px -20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            cursor: move;
+            flex-shrink: 0;
+            border-radius: 8px 8px 0 0;
+            pointer-events: auto;
+        }
+
+        .edit-form .form-header h3 {
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: 1px;
+        }
+
+        .edit-form .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            padding: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .edit-form .close-btn:hover {
+            opacity: 1;
+        }
+
+        .edit-form input {
+            width: 100%;
+            padding: 10px;
+            margin: 2px 0 0 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            height: 28px;
+        }
+
+        .form-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            flex-shrink: 0;
+        }
+
+        .form-buttons button {
+            min-width: 100px;
+            height: 30px;
+            font-size: 14px;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: transparent;
+            display: none;
+            z-index: 999;
+            pointer-events: none;
+        }
+
+        .overlay.active {
+            display: block;
+            background-color: transparent;
+        }
+
+        .resize-handle {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 15px;
+            height: 15px;
+            cursor: se-resize;
+            background: linear-gradient(135deg, transparent 50%, #ccc 50%);
+        }
+
+        .recent-records {
+            margin-top: 10px;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            max-height: 250px;
+        }
+
+        .recent-records h4 {
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        .record-list {
+            overflow-y: auto;
+            font-size: 12px;
+            max-height: 220px;
+            padding-right: 5px;
+        }
+
+        .record-item {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            line-height: 1.5;
+            margin-bottom: 2px;
+        }
+
+        .record-item:hover {
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .record-item div:first-child {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .record-item div:last-child {
+            color: #666;
+            font-size: 11px;
+        }
+
+        .record-manager {
+            position: fixed;
+            top: 20%;
+            right: 20%;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            z-index: 1000;
+            width: 400px;
+            height: 600px;
+            display: none;
+            resize: both;
+            overflow: auto;
+        }
+
+        .record-manager.active {
+            display: block;
+        }
+
+        .record-list-manager {
+            max-height: 500px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        .record-item-manager {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            background: #f9f9f9;
+            margin-bottom: 5px;
+            border-radius: 4px;
+        }
+
+        .record-item-manager:hover {
+            background-color: #f5f5f5;
+        }
+
+        .record-info {
+            flex: 1;
+        }
+
+        .record-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .manage-btn {
+            background-color: #ff9800;
+        }
+
+        .manage-btn:hover {
+            background-color: #f57c00;
+        }
+
+        #recordSearch {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .record-info div {
+            margin: 3px 0;
+            font-size: 13px;
+        }
+
+        .record-info div:first-child {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .import-btn {
+            background-color: #4CAF50;
+        }
+
+        .import-btn:hover {
+            background-color: #45a049;
+        }
+
+        .supplier-group {
+            margin-bottom: 15px;
+        }
+
+        .supplier-title {
+            width: 100%;
+            padding: 10px 15px;
+            margin: 0;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            border-left: 5px solid #4CAF50;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .supplier-title-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .add-new-btn {
+            padding: 5px 10px;
+            font-size: 14px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .add-new-btn:hover {
+            background-color: #45a049;
+        }
+
+        .supplier-title .count {
+            font-size: 14px;
+            color: #666;
+            background: #fff;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        .supplier-images {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .supplier-group .record-item-manager:last-child {
+            border-bottom: none;
+        }
+
+        .info-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            content: "显示/隐藏成本和尺码";
+        }
+
+        .image-item .info p.sensitive-info,
+        .image-item .info p.size-info {
+            display: none;
+        }
+
+        .show-sensitive .image-item .info p.sensitive-info,
+        .show-sensitive .image-item .info p.size-info {
+            display: flex;
+        }
+
+        .edit-form form {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 0 20px;
+            overflow: visible;
+            max-height: calc(80vh - 200px);
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        @media screen and (max-height: 800px) {
+            .edit-form form {
+                gap: 10px;
+            }
+
+            .edit-form input,
+            .edit-form select {
+                height: 32px;
+                font-size: 14px;
+            }
+
+            .edit-form label {
+                font-size: 14px;
+            }
+
+            .recent-records {
+                max-height: 150px;
+            }
+        }
+
+        /* 添加价格比较弹窗式 */
+        .price-compare-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 2000;
+            min-width: 300px;
+            display: none;
+        }
+
+        .price-compare-modal.active {
+            display: block;
+        }
+
+        .price-compare-list {
+            margin-top: 10px;
+        }
+
+        .price-compare-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .price-compare-item:last-child {
+            border-bottom: none;
+        }
+
+        .total-title {
+            background-color: #e3f2fd;
+            border-left: 5px solid #1976D2;
+            margin-bottom: 20px;
+        }
+
+        .total-title h3 {
+            color: #1976D2;
+            font-weight: bold;
+        }
+
+        .delete-btn {
+            padding: 5px 10px;
+            font-size: 14px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+
+        /* 优化滚动条样式 */
+        .record-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .record-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 2px;
+        }
+
+        .record-list::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 2px;
+        }
+
+        .record-list::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* 添加可点击样式 */
+        .clickable {
+            cursor: pointer;
+            color: #2196F3;
+        }
+        
+        .clickable:hover {
+            text-decoration: underline;
+        }
+        
+        /* 价格比较弹窗样式 */
+        .price-compare-header {
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        
+        .price-compare-header h4 {
+            margin: 0;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .price-compare-header p {
+            margin: 5px 0 0 0;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .price-compare-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 5px;
+        }
+        
+        .supplier-info {
+            flex: 1;
+        }
+        
+        .supplier-name {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .extra-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        
+        .extra-info div {
+            margin-bottom: 2px;
+        }
+        
+        .price-info {
+            text-align: right;
+        }
+        
+        .price {
+            font-size: 16px;
+            font-weight: bold;
+            color: #f44336;
+        }
+        
+        .cost {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .supplier-nav {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: white;
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            z-index: 1000;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+            width: 140px;
+        }
+
+        .supplier-nav-header {
+            font-weight: bold;
+            padding: 4px;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #1976D2;
+            color: #1976D2;
+            text-align: center;
+            font-size: 15px;
+        }
+
+        .supplier-nav-item {
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-bottom: 1px;
+            transition: all 0.2s;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .supplier-nav-item:hover {
+            background: #e3f2fd;
+            color: #1976D2;
+        }
+
+        /* 优化供应商组样式 */
+        .supplier-group {
+            margin-bottom: 15px;
+        }
+
+        .supplier-title {
+            padding: 10px 15px;
+            background: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 滚动条样式 */
+        .supplier-nav::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .supplier-nav::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .supplier-nav::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 2px;
+        }
+
+        .supplier-nav::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* 添加滚动到顶部按钮 */
+        .scroll-top {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #1976D2;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .scroll-top.visible {
+            opacity: 1;
+        }
+
+        .image-item {
+            position: relative;
+        }
+
+        .select-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 20px;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 1;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .image-item:hover .select-overlay {
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .select-overlay.selected {
+            display: flex;
+            background: #2196F3;
+            border-color: #2196F3;
+        }
+
+        .checkbox {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            font-weight: bold;
+            font-size: 12px;
+            opacity: 1;
+        }
+
+        .select-overlay:hover .checkbox {
+            color: #2196F3;
+        }
+
+        .select-overlay.selected .checkbox {
+            opacity: 1;
+            color: #fff;
+        }
+
+        .batch-actions {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .batch-actions .count {
+            color: #666;
+        }
+
+        .batch-actions .delete-btn {
+            background: #f44336;
+        }
+
+        .batch-actions .cancel-btn {
+            background: #9e9e9e;
+        }
+
+        .batch-actions button {
+            padding: 5px 15px;
+            font-size: 14px;
+        }
+
+        /* 添加选择按钮样式 */
+        .select-btn {
+            padding: 4px 8px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .select-btn:hover {
+            background-color: #45a049;
+        }
+
+        /* 调整价格比较项布局 */
+        .price-compare-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 5px;
+        }
+
+        .price-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .edit-btn {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .edit-btn:hover {
+            background-color: #1976D2;
+        }
+
+        /* 修改批量操作样式 */
+        .batch-actions {
+            gap: 15px;
+        }
+
+        .batch-actions button {
+            min-width: 80px;
+        }
+
+        /* 商品编辑表单样式 */
+        #editProductForm {
+            width: 400px;
+            max-width: 90vw;
+            right: 20%;
+            left: auto;
+            transform: none;
+        }
+
+        #editProductForm input[readonly] {
+            background-color: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        #editProductForm .form-header {
+            background: #ff9800; /* 使用不同的颜色区分 */
+        }
+
+        #editProductForm form {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* 修改版本选择项样式 */
+        .extra-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .extra-info div {
+            margin-bottom: 2px;
+        }
+
+        .supplier-name {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .price-compare-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 5px;
+            background: #fff;
+            transition: background-color 0.2s;
+        }
+
+        .price-compare-item:hover {
+            background: #f8f8f8;
+        }
+
+        .price-compare-header {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .price-compare-header h4 {
+            margin: 0;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .price-compare-header p {
+            margin: 5px 0 0 0;
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* 添加最近记录头部样式 */
+        .recent-records-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .recent-records-header h4 {
+            margin: 0;
+            color: #333;
+        }
+
+        .total-quantity {
+            background: #2196F3;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .record-items {
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        /* 更新列数控制样式 */
+        .column-control {
+            display: flex;
+            align-items: center;
+            margin-left: 20px;
+        }
+
+        .column-control input {
+            padding: 8px;
+            margin: 0 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 60px;
+            text-align: center;
+        }
+
+        .column-control input:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+
+        /* 去除输入框上下箭头 */
+        .column-control input::-webkit-outer-spin-button,
+        .column-control input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .column-control input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        /* 添加价格管理表单的样式 */
+        #hidePriceManager.edit-form {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            z-index: 1001;
+            width: 400px;
+            display: block;
+        }
+
+        #hidePriceManager .form-header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #hidePriceManager .add-new-btn {
+            padding: 5px 10px;
+            margin-left: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #hidePriceManager .delete-btn {
+            padding: 3px 8px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #hidePriceManager input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .overlay.active {
+            display: block;
+            background-color: transparent;
+        }
+
+        #hidePriceManager {
+            z-index: 1001;
+        }
+
+        #hidePriceManager .customer-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        #hidePriceManager #newCustomer {
+            width: 200px;
+            padding: 8px;
+            margin-right: 10px;
+        }
+
+        #customerList {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        .supplier-order-report {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            z-index: 2000;
+            display: none;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .supplier-order-report.active {
+            display: block;
+        }
+
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1;
+        }
+
+        .report-content {
+            padding: 20px 0;
+        }
+
+        .supplier-section {
+            margin-bottom: 40px;
+        }
+
+        .supplier-title {
+            font-size: 24px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #4CAF50;
+        }
+
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 10px;
+        }
+
+        .product-card {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            display: flex;
+            gap: 20px;
+            background: white;
+        }
+
+        .product-image-container {
+            width: 200px;
+            flex-shrink: 0;
+            border: 1px solid #eee;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .product-image {
+            width: 100%;
+            height: 200px;
+            object-fit: contain;
+        }
+
+        .product-info {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+        }
+
+        .product-name {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .product-code {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .size-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .size-item {
+            background: white;
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        /* 修改商品网格布局 */
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 10px;
+        }
+
+        .total-row {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            font-weight: bold;
+        }
+
+        .image-upload-section {
+            text-align: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px dashed #ddd;
+            border-radius: 4px;
+        }
+
+        .image-upload-section img {
+            margin-bottom: 10px;
+            border: 1px solid #eee;
+            padding: 5px;
+        }
+
+        .upload-btn {
+            background: #4CAF50;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .upload-btn:hover {
+            background: #45a049;
+        }
+
+        /* 修改供应商导航样式 */
+        .supplier-nav {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: white;
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            z-index: 1000;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+            width: 140px;
+        }
+
+        /* 修改开单窗口样式 */
+        #orderForm {
+            position: fixed;
+            top: 80px;
+            right: 190px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            width: 500px;
+            min-width: 500px;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        #orderForm .form-header {
+            background: #1976D2;
+            margin: -20px -20px 20px -20px;
+            padding: 15px 20px;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+        }
+
+        #orderForm .form-header h3 {
+            color: white;
+            margin: 0;
+            font-size: 16px;
+        }
+
+        #orderForm .form-group {
+            display: grid;
+            gap: 8px;
+        }
+
+        #orderForm label {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            font-size: 13px;
+        }
+
+        #orderForm input {
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+
+        #orderForm input[readonly] {
+            background: #f5f5f5;
+        }
+
+        #orderForm .form-buttons {
+            margin-top: 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* 优化滚动条样式 */
+        #orderForm::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #orderForm::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        #orderForm::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 2px;
+        }
+
+        #orderForm::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* 添加最近订单样式 */
+        .order-content {
+            display: flex;
+            gap: 10px;
+        }
+
+        #createOrderForm {
+            flex: 0 0 auto;
+            min-width: 200px;
+        }
+
+        .recent-orders {
+            flex: 0 0 180px;
+            border-left: 1px solid #eee;
+            padding-left: 10px;
+        }
+
+        .recent-orders-header {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .recent-orders-header h4 {
+            margin: 0;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .recent-orders-list {
+            max-height: calc(80vh - 150px);
+            overflow-y: auto;
+        }
+
+        .recent-order-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .order-main-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .order-customer {
+            font-weight: bold;
+            color: #000;
+            font-size: 14px;
+        }
+
+        .order-code {
+            color: #333;
+            font-size: 13px;
+        }
+
+        .order-second-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #333;
+            font-size: 13px;
+        }
+
+        .order-quantity-price {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .order-price {
+            font-weight: bold;
+            color: #f44336;
+        }
+
+        .order-time {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .recent-order-item:hover {
+            background: #f5f5f5;
+        }
+
+        /* 优化滚动条样式 */
+        .recent-orders-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .recent-orders-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .recent-orders-list::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 2px;
+        }
+
+        .recent-orders-list::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* 添加输入框度控制 */
+        #orderForm .form-group {
+            display: grid;
+            gap: 8px;
+        }
+
+        /* 设置不同字段的宽度 */
+        #orderForm input[type="text"],
+        #orderForm input[type="number"] {
+            width: 100%;
+        }
+
+        /* 商品编码、尺码、数量使用固定宽度 */
+        #orderForm input#orderCode {
+            width: 120px;
+        }
+
+        #orderForm input#orderSize {
+            width: 80px;
+        }
+
+        #orderForm input#orderQuantity {
+            width: 60px;
+        }
+
+        /* 成本和单价用固定宽度 */
+        #orderForm input#orderCost,
+        #orderForm input#orderPrice {
+            width: 100px;
+        }
+
+        /* 商品名称、供应商、客户、备货用自适应宽度 */
+        #orderForm input#orderName,
+        #orderForm input#orderSupplier,
+        #orderForm input#orderCustomer,
+        #orderForm input#orderRemark {
+            width: 150px;
+        }
+
+        /* 添加可编辑字段的样式 */
+        .order-customer[contenteditable="true"],
+        .order-size[contenteditable="true"],
+        .order-price[contenteditable="true"] {
+            cursor: text;
+            padding: 2px 4px;
+            border-radius: 3px;
+            min-width: 30px;
+            display: inline-block;
+        }
+
+        .order-customer[contenteditable="true"]:hover,
+        .order-size[contenteditable="true"]:hover,
+        .order-price[contenteditable="true"]:hover {
+            background: #f0f0f0;
+        }
+
+        .order-customer[contenteditable="true"]:focus,
+        .order-size[contenteditable="true"]:focus,
+        .order-price[contenteditable="true"]:focus {
+            background: #fff;
+            outline: 2px solid #2196F3;
+            outline-offset: -2px;
+        }
+
+        .order-price {
+            font-weight: bold;
+            color: #f44336;
+        }
+
+        .view-all-btn {
+            background-color: #1976D2;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .view-all-btn:hover {
+            background-color: #1565C0;
+        }
+
+        /* 修改商品编码样式 */
+        .order-code {
+            color: #1976D2;
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .order-code-name {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .order-name {
+            color: #666;
+            font-size: 12px;
+        }
+
+        /* 修改查看全部订单页面的编码样式 */
+        .code {
+            color: #1976D2;
+            font-family: monospace;
+            font-size: 15px;
+            font-weight: bold;
+            min-width: 100px;
+        }
+
+        /* 在 style 标签中添加新导入订单的样式 */
+        .order-item.new-import {
+            background-color: #e3f2fd;
+            animation: fadeBackground 5s forwards;
+        }
+        
+        @keyframes fadeBackground {
+            from { background-color: #e3f2fd; }
+            to { background-color: transparent; }
+        }
+
+        /* 修改放大按钮样式 */
+        .zoom-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.8);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #1976D2;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            transition: all 0.2s ease;
+            z-index: 2;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .zoom-btn:hover {
+            transform: scale(1.1);
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        /* 在 style 标签中添加放大图片的容器 */
+        .zoomed-image-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .zoomed-image {
+            max-width: 90%;
+            max-height: 90vh;
+            object-fit: contain;
+        }
+
+        /* 在 style 标签中添加关闭放大图片的按钮 */
+        .close-zoom {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 30px;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+
+        /* 添加可编辑价格字段的样式 */
+        #orderPrice {
+            background-color: #fff;
+            border: 1px solid #2196F3;
+            transition: all 0.2s;
+        }
+
+        #orderPrice:focus {
+            outline: none;
+            border-color: #1976D2;
+            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+        }
+
+        #orderPrice:hover {
+            border-color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>商品图片批量上传系统</h1>
+        
+        <div class="controls">
+            <div class="action-buttons">
+                <input type="file" id="excelFile" accept=".xlsx,.xls" style="display: none;">
+                <button onclick="document.getElementById('excelFile').click()" class="import-btn">导入Excel</button>
+                <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+                <button onclick="document.getElementById('folderInput').click()" class="import-btn">关联图片文件夹</button>
+                <input type="date" id="exportDate" style="padding: 8px; margin-right: 5px;" value="">
+                <button onclick="exportData()" class="export-btn">导出订单</button>
+                <button onclick="exportSupplierStats()" class="export-btn">导出统计</button>
+                <button onclick="exportProductData()" class="export-btn">导出商品</button>
+                <button onclick="generateOrderLabels()" class="export-btn">生成标签</button>
+                <button onclick="clearAllData()" class="clear-btn">清除商品数据</button>
+                <button onclick="openHidePriceManager()" class="manage-btn">管理价格显示</button>
+                <button onclick="exportSupplierOrder()" class="export-btn">导出报货表</button>
+                <button onclick="openImageSearch()" class="action-button">
+                    <i class="fas fa-camera"></i>
+                    以图搜图
+                </button>
+                <input type="file" id="orderExcelFile" accept=".xlsx,.xls" style="display: none;">
+                <button onclick="document.getElementById('orderExcelFile').click()" class="import-btn">导入订单</button>
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+            <button onclick="document.getElementById('fileInput').click()">选择图片件</button>
+            <p>支持批量上传，图片名称将为商品编码</p>
+            <div class="progress-bar">
+                <div class="progress"></div>
+            </div>
+        </div>
+
+        <div class="image-grid" id="imageGrid"></div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+    <div class="record-manager" id="recordManager">
+        <div class="form-header">
+            <h3>管理记录</h3>
+            <button class="close-btn" onclick="closeRecordManager()">×</button>
+        </div>
+        <div class="record-manager-content">
+            <div class="record-filter">
+                <input type="text" id="recordSearch" placeholder="搜索客户名称或编码...">
+            </div>
+            <div class="record-list-manager" id="recordListManager"></div>
+        </div>
+    </div>
+
+    <button id="infoToggle" class="info-toggle">显示/隐藏成本信息</button>
+
+    <input type="file" id="singleImageInput" accept="image/*" style="display: none;">
+
+    <div class="edit-form" id="newItemForm" style="right: 20%; left: auto;">
+        <div class="form-header" id="newItemFormHeader">
+            <h3>添加款</h3>
+            <button class="close-btn" onclick="closeNewItemForm()">×</button>
+        </div>
+        <form id="newProductForm">
+            <div class="image-upload-section">
+                <img id="newItemPreview" src="" alt="商品图片预览" style="max-width: 200px; max-height: 200px; display: none;">
+                <input type="file" id="newItemImage" accept="image/*" style="display: none;">
+                <button type="button" class="upload-btn" onclick="document.getElementById('newItemImage').click()">
+                    选择图片
+                </button>
+            </div>
+            <label>商品编码：
+                <input type="text" id="newItemCode" required>
+            </label>
+            <label>商品名称：
+                <input type="text" id="newItemName">
+            </label>
+            <label>供应商：
+                <input type="text" id="newItemSupplier">
+            </label>
+            <label>成本：
+                <input type="number" id="newItemCost" step="0.01">
+            </label>
+            <label>单价：
+                <input type="number" id="newItemPrice" step="0.01">
+            </label>
+            <label>尺码：
+                <input type="text" id="newItemSize">
+            </label>
+            <label>备注：
+                <input type="text" id="newItemRemark">
+            </label>
+            <div class="form-buttons">
+                <button type="button" onclick="closeNewItemForm()">取消</button>
+                <button type="submit">保存新款</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="price-compare-modal" id="priceCompareModal">
+        <div class="form-header">
+            <h3>版本选择</h3>
+            <button class="close-btn" onclick="closePriceCompare()">×</button>
+        </div>
+        <div class="price-compare-list" id="priceCompareList"></div>
+    </div>
+
+    <div class="supplier-nav" id="supplierNav"></div>
+
+    <div class="scroll-top" id="scrollTop" onclick="window.scrollTo({top: 0, behavior: 'smooth'})"></div>
+
+    <div id="batchActions" class="batch-actions" style="display: none;">
+        <span class="count"></span>
+        <button onclick="deleteSelectedItems()" class="delete-btn">删除选中</button>
+        <button onclick="clearSelection()" class="cancel-btn">取消选择</button>
+    </div>
+
+    <div class="edit-form" id="editProductForm">
+        <div class="form-header">
+            <h3>编辑商品信息</h3>
+            <button class="close-btn" onclick="closeEditProductForm()">×</button>
+        </div>
+        <form id="productEditForm">
+            <label>商品编码：
+                <input type="text" id="editProductCode" readonly>
+            </label>
+            <label>商品名称：
+                <input type="text" id="editProductName">
+            </label>
+            <label>供应商：
+                <input type="text" id="editProductSupplier">
+            </label>
+            <label>成本：
+                <input type="number" id="editProductCost" step="0.01">
+            </label>
+            <label>单价：
+                <input type="number" id="editProductPrice" step="0.01">
+            </label>
+            <label>尺码：
+                <input type="text" id="editProductSize">
+            </label>
+            <label>备注：
+                <input type="text" id="editProductRemark">
+            </label>
+            <div class="form-buttons">
+                <button type="button" onclick="closeEditProductForm()">取消</button>
+                <button type="submit">保存</button>
+            </div>
+        </form>
+    </div>
+
+    <div id="supplierOrderReport" class="supplier-order-report">
+        <div class="report-header">
+            <h2>供应商报表</h2>
+            <button onclick="closeSupplierReport()" class="close-btn">×</button>
+        </div>
+        <div class="report-content"></div>
+    </div>
+
+    <!-- 添加开单表单 -->
+    <div id="orderForm" style="display: none;">
+        <div class="form-header">
+            <h3>开单</h3>
+            <button class="close-btn" onclick="closeOrderForm()">×</button>
+        </div>
+        <div class="order-content">
+            <form id="createOrderForm">
+                <div class="form-group">
+                    <label>商品编码：
+                        <input type="text" id="orderCode" readonly>
+                    </label>
+                    <label>商品名称：
+                        <input type="text" id="orderName" readonly>
+                    </label>
+                    <label>供应商：
+                        <input type="text" id="orderSupplier" readonly>
+                    </label>
+                    <label>成本：
+                        <input type="number" id="orderCost" readonly>
+                    </label>
+                    <label>单价：
+                        <input type="number" id="orderPrice" step="0.01">
+                    </label>
+                    <label>客户：
+                        <input type="text" id="orderCustomer" required>
+                    </label>
+                    <label>尺码：
+                        <input type="text" id="orderSize" required>
+                    </label>
+                    <label>数量：
+                        <input type="number" id="orderQuantity" value="1" min="1" required>
+                    </label>
+                    <label>备注：
+                        <input type="text" id="orderRemark">
+                    </label>
+                </div>
+                <div class="form-buttons">
+                    <button type="button" onclick="closeOrderForm()">取消</button>
+                    <button type="submit">保存订单</button>
+                </div>
+            </form>
+            <!-- 添加最近订单显示区域 -->
+            <div id="recentOrders" class="recent-orders">
+                <div class="recent-orders-header">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h4>最近订单</h4>
+                        <button onclick="openAllOrders()" class="view-all-btn">查看全部</button>
+                    </div>
+                </div>
+                <div class="recent-orders-list" id="recentOrdersList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="zoomed-image-container" id="zoomedImageContainer">
+        <button class="close-zoom" onclick="closeZoomedImage()">×</button>
+        <img class="zoomed-image" id="zoomedImage" src="" alt="放大图片">
+    </div>
+
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // 添加滚动监听，控返回顶部按钮显示
+        window.addEventListener('scroll', () => {
+            const scrollTop = document.getElementById('scrollTop');
+            if (window.scrollY > 300) {
+                scrollTop.classList.add('visible');
+            } else {
+                scrollTop.classList.remove('visible');
+            }
+        });
+    </script>
+</body>
+</html> 

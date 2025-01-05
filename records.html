@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>记录管理</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .search-box {
+            width: 100%;
+            max-width: 300px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .record-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .record-item {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .record-header {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .code {
+            font-weight: bold;
+            font-size: 16px;
+            color: #1976D2;
+            min-width: 120px;
+        }
+
+        .record-body {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .field {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .field label {
+            color: #666;
+            min-width: 60px;
+        }
+
+        .edit-input {
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            flex: 1;
+            transition: border-color 0.3s;
+        }
+
+        .edit-input:focus {
+            border-color: #2196F3;
+            outline: none;
+        }
+
+        .edit-input.name {
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .save-btn {
+            padding: 8px 15px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 0.5;
+        }
+
+        .save-btn.modified {
+            opacity: 1;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            animation: fadeInOut 2s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, 20px); }
+            10% { opacity: 1; transform: translate(-50%, 0); }
+            90% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -20px); }
+        }
+
+        .record-info {
+            flex: 1;
+        }
+
+        .record-info div {
+            margin: 5px 0;
+        }
+
+        .record-info div:first-child {
+            font-weight: bold;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .record-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .edit-btn, .delete-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+        }
+
+        .edit-btn {
+            background: #2196F3;
+        }
+
+        .delete-btn {
+            background: #f44336;
+        }
+
+        .edit-btn:hover {
+            background: #1976D2;
+        }
+
+        .delete-btn:hover {
+            background: #D32F2F;
+        }
+
+        .back-btn {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .back-btn:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>记录管理</h1>
+            <button class="back-btn" onclick="window.close()">返回</button>
+        </div>
+        
+        <input type="text" id="recordSearch" class="search-box" placeholder="搜索商品编码、名称或供应商...">
+        
+        <div class="record-list" id="recordList"></div>
+    </div>
+
+    <script>
+        // 获取主窗口的订单数据
+        const orderData = JSON.parse(window.opener.localStorage.getItem('orderData') || '{}');
+
+        // 显示记录列表
+        function displayRecords(searchText = '') {
+            const recordList = document.getElementById('recordList');
+            
+            // 过滤记录
+            const filteredRecords = Object.entries(orderData)
+                .filter(([id, order]) => {
+                    const searchString = `${order.code} ${order.name} ${order.supplier} ${order.customer}`.toLowerCase();
+                    return searchString.includes(searchText.toLowerCase());
+                })
+                .sort((a, b) => new Date(b[1].timestamp) - new Date(a[1].timestamp));
+
+            // 生成HTML
+            recordList.innerHTML = filteredRecords.map(([id, order]) => `
+                <div class="record-item" data-id="${id}">
+                    <div class="record-info">
+                        <div class="record-header">
+                            <span class="code">${order.code}</span>
+                            <span class="name">${order.name || ''}</span>
+                        </div>
+                        <div class="record-body">
+                            <div class="field">
+                                <label>供应商:</label>
+                                <span>${order.supplier || '-'}</span>
+                            </div>
+                            <div class="field">
+                                <label>客户:</label>
+                                <span>${order.customer || '-'}</span>
+                            </div>
+                            <div class="field">
+                                <label>数量:</label>
+                                <span>${order.quantity || '-'}</span>
+                            </div>
+                            <div class="field">
+                                <label>单价:</label>
+                                <span>${order.price || '-'}</span>
+                            </div>
+                            <div class="field">
+                                <label>备注:</label>
+                                <span>${order.remark || '-'}</span>
+                            </div>
+                            <div class="field">
+                                <label>时间:</label>
+                                <span>${new Date(order.timestamp).toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="record-actions">
+                        <button class="delete-btn" onclick="deleteRecord('${id}')">删除</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 删除记录
+        function deleteRecord(id) {
+            if (confirm('确定要删除这条订单记录吗？')) {
+                delete orderData[id];
+                window.opener.localStorage.setItem('orderData', JSON.stringify(orderData));
+                displayRecords();
+            }
+        }
+
+        // 初始化搜索功能
+        document.getElementById('recordSearch').addEventListener('input', (e) => {
+            displayRecords(e.target.value);
+        });
+
+        // 初始显示
+        displayRecords();
+    </script>
+</body>
+</html> 
