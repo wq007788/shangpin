@@ -1670,9 +1670,101 @@
         #orderPrice:hover {
             border-color: #1976D2;
         }
+
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .login-form {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-form h2 {
+            margin: 0 0 20px 0;
+            text-align: center;
+            color: #333;
+        }
+
+        .login-form .form-group {
+            margin-bottom: 20px;
+        }
+
+        .login-form label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+        }
+
+        .login-form input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .login-form input:focus {
+            outline: none;
+            border-color: #2196F3;
+            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+        }
+
+        .login-form button {
+            width: 100%;
+            padding: 12px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .login-form button:hover {
+            background: #1976D2;
+        }
+
+        .login-error {
+            color: #f44336;
+            margin-top: 10px;
+            text-align: center;
+            display: none;
+        }
     </style>
 </head>
 <body>
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-form">
+            <h2>登录系统</h2>
+            <form id="loginForm" onsubmit="return handleLogin(event)">
+                <div class="form-group">
+                    <label for="username">用户名</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">密码</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit">登录</button>
+            </form>
+        </div>
+    </div>
+
     <div class="container">
         <h1>商品图片批量上传系统</h1>
         
@@ -1696,6 +1788,7 @@
                 </button>
                 <input type="file" id="orderExcelFile" accept=".xlsx,.xls" style="display: none;">
                 <button onclick="document.getElementById('orderExcelFile').click()" class="import-btn">导入订单</button>
+                <button onclick="logout()" class="clear-btn">退出登录</button>
             </div>
         </div>
 
@@ -1901,6 +1994,34 @@
             } else {
                 scrollTop.classList.remove('visible');
             }
+        });
+
+        // 双击保存功能
+        document.querySelectorAll('.supplier-section').forEach(section => {
+            section.addEventListener('dblclick', async function() {
+                try {
+                    const canvas = await html2canvas(this, {
+                        scale: 2,
+                        useCORS: true,
+                        logging: false,
+                        backgroundColor: '#ffffff'
+                    });
+
+                    canvas.toBlob(async blob => {
+                        try {
+                            const item = new ClipboardItem({ 'image/png': blob });
+                            await navigator.clipboard.write([item]);
+                            alert('已复制到剪贴板！');
+                        } catch (error) {
+                            console.error('复制到剪贴板失败:', error);
+                            alert('复制到剪贴板失败，请检查浏览器权限设置。\n\n请确保已授予网站剪贴板访问权限。');
+                        }
+                    });
+                } catch (error) {
+                    console.error('生成图片失败:', error);
+                    alert('生成图片失败: ' + error.message);
+                }
+            });
         });
     </script>
 </body>

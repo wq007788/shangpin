@@ -1013,15 +1013,18 @@ function updateRecordManager() {
 
 // 添加删除记录功能
 function deleteRecord(orderId) {
-    if (!confirm('确定要删除这条记录吗？')) return;
-
-    const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
-    delete orderData[orderId];
-    localStorage.setItem('orderData', JSON.stringify(orderData));
-    
-    // 更新显示
-    updateRecordManager();
-    updateRecentOrders();
+    if (confirm('确定要删除这条订单记录吗？')) {
+        const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
+        delete orderData[orderId];
+        localStorage.setItem('orderData', JSON.stringify(orderData));
+        
+        // 通知父窗口更新
+        if (window.opener && !window.opener.closed) {
+            window.opener.updateRecentOrders();
+        }
+        // 刷新当前页面
+        location.reload();
+    }
 }
 
 // 添加编辑记录功能
@@ -1322,82 +1325,25 @@ function initializeGridColumns() {
 // 在页面加载时初始化所有功能
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // 检查浏览器支持
-        if (!window.indexedDB) {
-            throw new Error('您的浏览器不支持 IndexedDB，请使用现代浏览器');
-        }
-
-        console.log('开始初始化系统...');
+        // 首先检查登录状态
+        checkLoginStatus();
         
-        // 先初始化数据库
-        console.log('正在初始化数据库...');
-        await initDB();
-        console.log('数据库初始化成功');
-
-        // 初始化其他功能
-        const initResults = [];
-
-        // 使用 try-catch 分别处理每个初始化函数
-        const initFunctions = [
-            { name: 'initializeImageUpload', fn: initializeImageUpload },
-            { name: 'initializeForms', fn: initializeForms },
-            { name: 'initializeExcelImport', fn: initializeExcelImport },
-            { name: 'initializeFolderInput', fn: initializeFolderInput },
-            { name: 'initializeDragAndDrop', fn: initializeDragAndDrop },
-            { name: 'initializeProductEditForm', fn: initializeProductEditForm },
-            { name: 'initializeGridColumns', fn: initializeGridColumns }
-        ];
-
-        for (const { name, fn } of initFunctions) {
-            try {
-                await fn();
-                console.log(`${name} 初始化成功`);
-                initResults.push(`${name}: 成功`);
-            } catch (error) {
-                console.error(`${name} 初始化失败:`, error);
-                initResults.push(`${name}: 失败 - ${error.message}`);
+        // 如果未登录，直接返回，不初始化其他功能
+        if (!localStorage.getItem('isLoggedIn')) {
+            // 确保主容器隐藏
+            const container = document.querySelector('.container');
+            if (container) {
+                container.style.display = 'none';
             }
+            return;
         }
 
-        // 更新显示
-        try {
-            await updateImageGrid();
-            console.log('图片网格更新成功');
-        } catch (error) {
-            console.error('图片网格更新失败:', error);
-        }
-
-        // 添加价格显示切换功能
-        const infoToggle = document.getElementById('infoToggle');
-        if (infoToggle) {
-            infoToggle.addEventListener('click', () => {
-                document.body.classList.toggle('show-sensitive');
-            });
-        }
-
-        // 设置导出日期默认为当天
-        const exportDateInput = document.getElementById('exportDate');
-        if (exportDateInput) {
-            const today = new Date().toISOString().split('T')[0];
-            exportDateInput.value = today;
-        }
-
-        // 初始化新商品图片上传
-        try {
-            initializeNewItemImageUpload();
-            console.log('新商品图片上传初始化成功');
-        } catch (error) {
-            console.error('新商品图片上传初始化失败:', error);
-        }
-
-        console.log('系统初始化完成');
-        console.log('初始化结果:', initResults);
+        // 如果已登录，初始化系统
+        await initializeSystem();
 
     } catch (error) {
-        console.error('系统初始化失败:', error);
-        const errorDetails = `初始化失败: ${error.message}\n\n详细信息:\n${error.stack}`;
-        console.error(errorDetails);
-        alert('系统初始化失败，请查看控制台了解详细信息');
+        console.error('初始化失败:', error);
+        alert('系统初始化失败，请刷新页面重试');
     }
 });
 
@@ -1775,67 +1721,119 @@ function updateSupplierNav() {
 
     // 修改保存编辑数据的函数
     async function saveEditProductData(event) {
+        if (!event) return;
         event.preventDefault();
         
-        const editProductForm = document.getElementById('editProductForm');
-        const isBatchEdit = editProductForm.dataset.batchEdit === 'true';
-        const productData = JSON.parse(localStorage.getItem('productData') || '{}');
-
-        // 获取表单数据
-        const formData = {
-            code: document.getElementById('editProductCode').value.trim(),
-            name: document.getElementById('editProductName').value.trim(),
-            supplier: document.getElementById('editProductSupplier').value.trim(),
-            cost: document.getElementById('editProductCost').value.trim(),
-            price: document.getElementById('editProductPrice').value.trim(),
-            size: document.getElementById('editProductSize').value.trim(),
-            remark: document.getElementById('editProductRemark').value.trim()
-        };
-
         try {
-            if (isBatchEdit) {
-                // 批量更新选中的商品
-                for (const id of selectedItems) {
-                    const oldProduct = productData[id];
-                    const newId = `${formData.code}_${formData.supplier}`;
-                    
-                    // 删除旧记录
-                    delete productData[id];
-                    
-                    // 创建新记录
-                    productData[newId] = {
-                        ...oldProduct,
-                        ...formData,
-                        id: newId,
-                        timestamp: new Date().toISOString()
-                    };
+            // 获取所有表单数据
+            const code = document.getElementById('editProductCode').value;
+            const name = document.getElementById('editProductName').value;
+            const supplier = document.getElementById('editProductSupplier').value;
+            const cost = document.getElementById('editProductCost').value;
+            const price = document.getElementById('editProductPrice').value;
+            const size = document.getElementById('editProductSize').value;
+            const remark = document.getElementById('editProductRemark').value;
 
-                    // 更新图片关联
-                    await updateImageAssociation(oldProduct.code, formData.code, oldProduct.supplier, formData.supplier);
-                }
-                
-                // 清除选择状态
-                selectedItems.clear();
-            } else {
-                // 单个商品编辑逻辑...
-                // 保持原有的单个编辑逻辑不变
+            // 获取现有的商品数据
+            let productData = JSON.parse(localStorage.getItem('productData') || '{}');
+            
+            // 构建唯一标识符
+            const uniqueId = `${code}_${supplier}`;
+            
+            // 获取原有数据
+            const originalData = productData[uniqueId] || {};
+            
+            // 更新商品信息
+            const updatedProduct = {
+                ...originalData,
+                code: code,
+                name: name,
+                supplier: supplier,
+                cost: cost,
+                price: price,
+                size: size,
+                remark: remark,
+                timestamp: new Date().toISOString()
+            };
+
+            // 保存更新后的商品数据
+            productData[uniqueId] = updatedProduct;
+            localStorage.setItem('productData', JSON.stringify(productData));
+
+            // 更新开单页面的数据
+            const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
+            if (orderData[code]) {
+                orderData[code] = {
+                    ...orderData[code],
+                    name: name,
+                    supplier: supplier,
+                    cost: cost,
+                    price: price,
+                    size: size
+                };
+                localStorage.setItem('orderData', JSON.stringify(orderData));
             }
 
-            // 保存更新后的数据
-            localStorage.setItem('productData', JSON.stringify(productData));
-            
-            // 更新显示
-            await updateImageGrid();
-            
+            // 直接更新对应商品卡片的文本内容
+            const card = document.querySelector(`[data-id="${uniqueId}"]`);
+            if (card) {
+                // 更新各个字段的文本内容
+                card.querySelector('.product-name').textContent = name || '-';
+                card.querySelector('.product-price').textContent = price || '-';
+                card.querySelector('.product-supplier').textContent = supplier || '-';
+                card.querySelector('.product-cost').textContent = cost || '-';
+                card.querySelector('.product-size').textContent = size || '-';
+                card.querySelector('.product-remark').textContent = remark || '-';
+            }
+
             // 关闭编辑表单
             closeEditProductForm();
             
-            alert('保存成功！');
+            // 使用更温和的提示方式
+            const message = document.createElement('div');
+            message.className = 'save-message';
+            message.textContent = '已保存';
+            message.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #4CAF50;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 4px;
+                opacity: 0;
+                transition: opacity 0.3s;
+                z-index: 9999;
+            `;
+            document.body.appendChild(message);
+            
+            // 显示并自动消失
+            requestAnimationFrame(() => {
+                message.style.opacity = '1';
+                setTimeout(() => {
+                    message.style.opacity = '0';
+                    setTimeout(() => message.remove(), 300);
+                }, 1500);
+            });
+
+            // 触发自定义事件，通知其他页面数据已更新
+            window.dispatchEvent(new CustomEvent('productDataUpdated', {
+                detail: { product: updatedProduct }
+            }));
+
         } catch (error) {
             console.error('保存失败:', error);
             alert('保存失败: ' + error.message);
         }
     }
+
+    // 修改表单提交事件绑定
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('productEditForm');
+        if (form) {
+            form.onsubmit = saveEditProductData;
+        }
+    });
 
     // 添加更新图片关联的函数
     async function updateImageAssociation(oldCode, newCode, oldSupplier, newSupplier) {
@@ -2126,140 +2124,154 @@ function updateSupplierNav() {
     // 添加一个不显示价格的客户列表
     const hidePriceCustomers = ['客户A', '客户B', '客户C']; // 可以根据需要添加客户名称
 
-    // 修改生成标签HTML内容
+    // 修改生成标签HTML的函数
     function generateLabelHTML(labelData) {
+        // 计算需要的页数
+        const itemsPerPage = 50;
+        const pages = Math.ceil(labelData.length / itemsPerPage);
+        
+        // 获取不显示价格的客户列表
+        const hidePriceCustomers = JSON.parse(localStorage.getItem('hidePriceCustomers') || '[]');
+        
         return `
             <!DOCTYPE html>
-            <html>
+            <html style="margin:0; padding:0; height:auto;">
             <head>
                 <meta charset="UTF-8">
                 <title>订单标签</title>
                 <style>
                     @page {
                         size: A4;
-                        margin: 5mm;
+                        margin: 7mm 2.5mm 1mm 3mm;  /* 上边距增加到7mm */
+                    }
+                    html, body {
+                        margin: 0;
+                        padding: 0;
+                        height: auto;
                     }
                     body {
-                        margin: 0;
-                        padding: 2mm;
+                        padding: 7mm 2.5mm 1mm 3mm;  /* 上边距增加到7mm */
                     }
                     .label-container {
                         display: grid;
-                        grid-template-columns: repeat(5, 1fr); /* 5列 */
-                        gap: 1mm;                             /* 减小间距 */
-                        padding: 1mm;
+                        grid-template-columns: repeat(5, 1fr);
+                        grid-template-rows: repeat(10, 28mm);
+                        column-gap: 1.2mm;
+                        row-gap: 0;
+                        padding: 0;
+                        margin: 0;
+                        /* 移除 border: 1px solid #000; */
                     }
                     .label {
-                        border: 1px solid #000;
-                        padding: 3px;                         /* 减小内边距 */
-                        break-inside: avoid;
-                        page-break-inside: avoid;
+                        padding: 0.3mm;
                         display: flex;
-                        flex-direction: row;
-                        margin-bottom: 1mm;                   /* 减小底部边距 */
-                        font-size: 12px;
-                        height: 55mm;                         /* 调整高度以适应10行 */
+                        margin: 0;
+                        height: 100%;
                     }
-                    .label-image {
-                        width: 50mm;                         /* 调整图片宽度 */
-                        height: 50mm;                        /* 调整图片高度 */
+                    .image-cell {
+                        flex: 0 0 55%;
                         display: flex;
                         align-items: center;
                         justify-content: center;
-                        border: 1px solid #eee;
-                        background: #f9f9f9;
-                        flex-shrink: 0;
+                        padding: 0.3mm;
                     }
-                    .label-image img {
+                    .image-cell img {
                         max-width: 100%;
                         max-height: 100%;
                         object-fit: contain;
                     }
-                    .label-info {
-                        flex: 1;
-                        font-size: 14px;
-                        padding-left: 3px;
+                    .info-cell {
+                        flex: 0 0 25%;
+                        padding: 0.3mm;
                         display: flex;
                         flex-direction: column;
-                        justify-content: space-between;
+                        justify-content: center;
+                        align-items: center;
+                    }
+                    .info-text {
+                        font-size: 14px;
+                        font-weight: 700;
+                        text-align: center;
+                        margin: 0.3mm 0;
+                    }
+                    .customer-cell {
+                        flex: 0 0 20%;
+                        padding: 0.3mm;
+                        display: flex;
+                        align-items: center;      /* 垂直居中 */
+                        justify-content: center;  /* 水平居中 */
                     }
                     .customer-name {
                         font-size: 16px;
                         font-weight: bold;
-                        text-align: center;
+                        writing-mode: vertical-rl;
+                        text-orientation: upright;
+                        white-space: nowrap;
+                        letter-spacing: 2px;
                         margin: 0;
-                        padding: 2px 0;
+                        padding: 0;
+                        display: flex;           /* 添加flex布局 */
+                        align-items: center;     /* 垂直居中 */
+                        justify-content: center; /* 水平居中 */
+                        height: 100%;           /* 占满高度 */
+                        width: 100%;            /* 占满宽度 */
                     }
-                    .details {
-                        display: flex;
-                        flex-direction: column;
-                        gap: 2px;
+                    .page-container {
+                        page-break-after: always;
+                        margin-bottom: 0;
                     }
-                    .details-row {
-                        display: flex;
-                        justify-content: space-around;
-                        align-items: center;
-                        margin: 0;
+                    .page-container:last-child {
+                        page-break-after: auto;
                     }
                     @media print {
-                        .label {
-                            break-inside: avoid;
+                        @page {
+                            margin: 7mm 2.5mm 1mm 3mm;  /* 上边距增加到7mm */
+                        }
+                        body {
+                            margin: 0;
+                            padding: 7mm 2.5mm 1mm 3mm;  /* 上边距增加到7mm */
+                            height: 297mm;
+                        }
+                        .label-container {
+                            height: 280mm;
+                            page-break-after: avoid;
                             page-break-inside: avoid;
                         }
-                        .no-print {
+                        .print-button {
                             display: none;
                         }
-                        /* 每50个标签后强制分页 */
-                        .label:nth-child(50) {
-                            page-break-after: always;
-                        }
-                    }
-                    .print-button {
-                        position: fixed;
-                        top: 20px;
-                        right: 20px;
-                        padding: 10px 20px;
-                        background: #4CAF50;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        z-index: 1000;
-                    }
-                    .print-button:hover {
-                        background: #45a049;
                     }
                 </style>
             </head>
             <body>
-                <button onclick="window.print()" class="print-button no-print">打印标签</button>
-                <div class="label-container">
-                    ${labelData.map(label => {
-                        // 从localStorage获取最新的客户列表
-                        const hidePriceCustomers = getHidePriceCustomers();
-                        const shouldShowPrice = !hidePriceCustomers.includes(label.客户);
-                        
-                        return `
-                        <div class="label">
-                            <div class="label-image">
-                                <img src="${label._IMAGE_}" 
-                                     alt="商品图片"
-                                     onerror="console.error('图片加载失败'); this.src='${createEmptyImage()}';">
-                            </div>
-                            <div class="label-info">
-                                <div class="customer-name">${label.客户}</div>
-                                <div class="details">
-                                    <div class="details-row">
-                                        <span>${label.尺码}</span>
-                                        ${shouldShowPrice ? `<span>${label.单价}</span>` : ''}
-                                    </div>
-                                    ${label.备注 ? `<div class="details-row">${label.备注}</div>` : ''}
-                                </div>
-                            </div>
+                <button onclick="window.print()" class="print-button">打印标签</button>
+                ${Array.from({ length: pages }, (_, pageIndex) => `
+                    <div class="page-container">
+                        <div class="label-container">
+                            ${labelData.slice(pageIndex * itemsPerPage, (pageIndex + 1) * itemsPerPage)
+                                .map(label => {
+                                    const shouldShowPrice = !hidePriceCustomers.includes(label.客户);
+                                    return `
+                                        <div class="label">
+                                            <div class="image-cell">
+                                                <img src="${label._IMAGE_}" 
+                                                     alt="商品图片"
+                                                     onerror="this.src='${createEmptyImage()}';">
+                                            </div>
+                                            <div class="info-cell">
+                                                <div class="info-text">${label.尺码}</div>
+                                                ${shouldShowPrice ? `<div class="info-text">${label.单价}</div>` : '<div class="info-text"></div>'}
+                                                <div class="info-text">${label.备注 || ''}</div>
+                                            </div>
+                                            <div class="customer-cell">
+                                                <div class="customer-name">${label.客户}</div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
                         </div>
-                        `;
-                    }).join('')}
-                </div>
+                    </div>
+                `).join('')}
             </body>
             </html>
         `;
@@ -2272,17 +2284,32 @@ function updateSupplierNav() {
         
         // 过滤选择日期的订单
         const dayStart = new Date(exportDate);
-        dayStart.setHours(0, 0, 0, 0);  // 设置为当天开始时间
+        dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(exportDate);
-        dayEnd.setHours(23, 59, 59, 999);  // 设置为当天结束时间
+        dayEnd.setHours(23, 59, 59, 999);
 
-        const filteredOrders = Object.values(orderData).filter(order => {
-            const orderDate = new Date(order.timestamp);
-            // 使用本地时间进行比较
-            orderDate.setHours(0, 0, 0, 0);
-            dayStart.setHours(0, 0, 0, 0);
-            return orderDate >= dayStart && orderDate < dayEnd;
-        });
+        // 过滤并排序订单
+        const filteredOrders = Object.values(orderData)
+            .filter(order => {
+                const orderDate = new Date(order.timestamp);
+                orderDate.setHours(0, 0, 0, 0);
+                dayStart.setHours(0, 0, 0, 0);
+                return orderDate >= dayStart && orderDate < dayEnd;
+            })
+            .sort((a, b) => {
+                // 首先按供应商排序
+                const supplierCompare = (a.supplier || '').localeCompare(b.supplier || '');
+                if (supplierCompare !== 0) return supplierCompare;
+
+                // 供应商相同时按商品编码排序
+                const codeCompare = (a.code || '').localeCompare(b.code || '');
+                if (codeCompare !== 0) return codeCompare;
+
+                // 商品编码相同时按尺码排序
+                const sizeA = parseInt(a.size) || 0;
+                const sizeB = parseInt(b.size) || 0;
+                return sizeA - sizeB;
+            });
 
         if (filteredOrders.length === 0) {
             alert(`${exportDate} 没有订单记录`);
@@ -2290,19 +2317,20 @@ function updateSupplierNav() {
         }
 
         try {
-            console.log('开始生成标...');
+            console.log('开始生成标签...');
             // 为每个订单根据数量创建多个标签数据
             const labelData = await Promise.all(filteredOrders.flatMap(async order => {
                 try {
                     // 获取商品图片
                     console.log('获取图片:', order.code, order.supplier);
                     const imageData = await getImageFromDB(order.code, order.supplier);
-                    console.log('获取到的图数据:', imageData);
-                    
+                    console.log('获取到的图片数据:', imageData);
+
                     // 创建数量对应的标签数组
                     const quantity = parseInt(order.quantity) || 1;
                     return Array(quantity).fill().map(() => ({
                         '_IMAGE_': imageData?.file || createEmptyImage(),
+                        '供应商': order.supplier || '',
                         '客户': order.customer || '',
                         '商品编码': order.code || '',
                         '尺码': order.size || '',
@@ -2310,9 +2338,10 @@ function updateSupplierNav() {
                         '备注': order.remark || ''
                     }));
                 } catch (error) {
-                    console.error('处单个订单标签失败:', error);
+                    console.error('处理单个订单标签失败:', error);
                     return [{
                         '_IMAGE_': createEmptyImage(),
+                        '供应商': order.supplier || '',
                         '客户': order.customer || '',
                         '商品编码': order.code || '',
                         '尺码': order.size || '',
@@ -2331,6 +2360,7 @@ function updateSupplierNav() {
             const printWindow = window.open('', '_blank');
             printWindow.document.write(htmlContent);
             printWindow.document.close();
+
         } catch (error) {
             console.error('生成标签失败:', error);
             alert('生成标签失败: ' + error.message);
@@ -2443,32 +2473,36 @@ function updateSupplierNav() {
     async function exportSupplierOrder() {
         try {
             const exportDate = document.getElementById('exportDate').value;
-        const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
-            
-            // 获取保存的文字大小
+            const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
             const savedTextSize = localStorage.getItem('reportTextSize') || '16';
+            
+            // 设置日期范围：从选择日期的0点到23:59:59.999
+            const dayStart = new Date(exportDate);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(exportDate);
+            dayEnd.setHours(23, 59, 59, 999);
 
-            // 过滤指定日期的订单
-        const filteredOrders = Object.values(orderData).filter(order => {
-                const orderDate = new Date(order.timestamp).toISOString().split('T')[0];
-                return orderDate === exportDate;
-        });
+            // 使用时间戳进行过滤
+            const filteredOrders = Object.values(orderData).filter(order => {
+                const orderTime = new Date(order.timestamp);
+                return orderTime >= dayStart && orderTime < dayEnd;
+            });
 
-        if (filteredOrders.length === 0) {
-            alert(`${exportDate} 没有订单记录`);
-            return;
-        }
+            if (filteredOrders.length === 0) {
+                alert(`${exportDate} 没有订单记录`);
+                return;
+            }
 
             // 生成报货表HTML
             const html = await generateSupplierOrderHTML(filteredOrders, exportDate, savedTextSize);
             
             // 创建新窗口显示报货表
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
             const reportWindow = window.open(url, '_blank');
             
             // 清理URL
-        setTimeout(() => URL.revokeObjectURL(url), 100);
+            setTimeout(() => URL.revokeObjectURL(url), 100);
         } catch (error) {
             console.error('导出报货表失败:', error);
             alert('导出报货表失败: ' + error.message);
@@ -2535,8 +2569,16 @@ function updateSupplierNav() {
                     <div class="product-list">
             `;
 
-            // 遍历供应商的所有商品
-            for (const [_, product] of products) {
+            // 将 Map 转换为数组并按商品编码的第一个字母排序
+            const sortedProducts = Array.from(products.entries())
+                .sort((a, b) => {
+                    const firstLetterA = (a[1].code || '').charAt(0).toUpperCase();
+                    const firstLetterB = (b[1].code || '').charAt(0).toUpperCase();
+                    return firstLetterA.localeCompare(firstLetterB);
+                });
+
+            // 遍历排序后的商品
+            for (const [_, product] of sortedProducts) {
                 const sizes = Array.from(product.sizes.entries())
                     .sort((a, b) => {
                         const sizeA = parseInt(a[0]) || 0;
@@ -2544,15 +2586,14 @@ function updateSupplierNav() {
                         return sizeA - sizeB;
                     });
 
-                // 只修改这一行，将":"改为"*"，保持"、"不变
                 const sizeList = sizes.map(([size, qty]) => `${size}*${qty}`).join('、');
 
                 html += `
                     <div class="product-row">
-                            <img src="${product.image || 'placeholder.png'}" 
-                             class="product-image" 
-                             alt="${product.code}"
-                             onerror="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='">
+                        <img src="${product.image || 'placeholder.png'}" 
+                            class="product-image" 
+                            alt="${product.code}"
+                            onerror="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='">
                         <div class="product-info">
                             <div class="product-code">${product.code}</div>
                             <div class="product-name">${product.name || '-'}</div>
@@ -2583,7 +2624,9 @@ function updateSupplierNav() {
                     body { 
                         font-family: Arial; 
                         padding: 20px;
-                    margin: 0;
+                        max-width: 1800px;
+                        margin: 0 auto;
+                        background: #f5f5f5;
                     }
                     .control-panel {
                         position: fixed;
@@ -2914,58 +2957,23 @@ function updateSupplierNav() {
 
     // 添加更新订单字段的函数
     function updateOrderField(orderId, field, value) {
-        try {
-            const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
-            if (orderData[orderId]) {
-                // 根据字段类型进行适当的处理
-                if (field === 'quantity') {
-                    // 移除数量前 '×' 符号并确保是数
-                    value = value.replace(/[×x]/i, '').trim();
-                    // 确保数量是正整数
-                    const num = parseInt(value);
-                    if (isNaN(num) || num < 1) {
-                        alert('请输入有效的数量');
-                        location.reload(); // 新加载以恢复原值
-                        return;
-                    }
-                    orderData[orderId][field] = num;
-                } else if (field === 'price') {
-                    // 移除价格中的 '¥' 符号
-                    value = value.replace('¥', '').trim();
-                    orderData[orderId][field] = value;
-                } else {
-                    // 其他字段直接保存
-                    orderData[orderId][field] = value.trim();
-                }
-                
-                localStorage.setItem('orderData', JSON.stringify(orderData));
-                
-                // 更新当前页面的最近订单显示
-                updateRecentOrders();
-                
-                // 如果是在全部订单页面中
-                if (window.opener && !window.opener.closed) {
-                    // 通知父窗口更新
-                    window.opener.updateRecentOrders();
-                } else {
-                    // 如果是在主窗口中
-                    // 通知所有打开的全部订单页面更新
-                    const allWindows = window.opener ? [window.opener] : window.openedWindows || [];
-                    allWindows.forEach(win => {
-                        if (!win.closed) {
-                            try {
-                                // 尝试刷新全部订单页面
-                                win.location.reload();
-                            } catch (e) {
-                                console.error('无法更新子窗口:', e);
-                            }
-                        }
-                    });
-                }
+        const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
+        if (orderData[orderId]) {
+            if (field === 'price') {
+                value = value.replace('¥', '').trim();
             }
-        } catch (error) {
-            console.error('更新订单失败:', error);
-            alert('更新订单失败: ' + error.message);
+            orderData[orderId][field] = value.trim();
+            localStorage.setItem('orderData', JSON.stringify(orderData));
+            
+            // 更新父窗口的最近订单显示
+            if (window.opener && !window.opener.closed) {
+                window.opener.updateRecentOrders();
+            }
+            
+            // 如果在全部订单页面，刷新当前页面
+            if (document.querySelector('.order-list')) {
+                location.reload();
+            }
         }
     }
 
@@ -2979,15 +2987,13 @@ function updateSupplierNav() {
         const dayEnd = new Date(exportDate);
         dayEnd.setHours(23, 59, 59, 999);
         
+        // 过滤当天的订单
         const orders = Object.values(orderData)
             .filter(order => {
                 const orderDate = new Date(order.timestamp);
-                const dayStart = new Date(exportDate);
-                const dayEnd = new Date(exportDate);
-                dayEnd.setDate(dayEnd.getDate() + 1);
                 return orderDate >= dayStart && orderDate < dayEnd;
             })
-            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // 移除多余的括号
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
         if (orders.length === 0) {
             alert(`${exportDate} 没有订单记录`);
@@ -3004,93 +3010,142 @@ function updateSupplierNav() {
                     body { 
                         font-family: Arial; 
                         padding: 20px;
-                        max-width: 1200px;
+                        max-width: 1800px;
                         margin: 0 auto;
+                        background: #f5f5f5;
                     }
                     .order-list {
                         margin-top: 20px;
+                        background: white;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        overflow: hidden;
                     }
                     .order-item {
-                        display: flex;
-                        align-items: center;
-                        padding: 15px;
+                        display: grid;
+                        grid-template-columns: 30px 120px 120px minmax(100px, 1fr) 80px 80px 80px 80px 120px 150px 100px 80px;
+                        gap: 12px;
+                        padding: 12px 15px;
                         border-bottom: 1px solid #eee;
-                        gap: 20px;
+                        align-items: center;
                     }
                     .order-item:hover {
                         background: #f8f9fa;
                     }
                     .customer {
-                        min-width: 120px;
                         font-weight: bold;
-                    }
-                    .product-info {
-                        flex: 1;
-                        display: flex;
-                        gap: 15px;
-                        align-items: center;
+                        color: #333;
+                        padding: 4px 8px;
+                        border-radius: 4px;
+                        background: #f5f5f5;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
                     }
                     .code {
                         color: #1976D2;
                         font-family: monospace;
-                        min-width: 100px;
+                        font-weight: bold;
+                        font-size: 14px;
+                        white-space: nowrap;
+                        padding: 4px 8px;
+                        background: #e3f2fd;
+                        border-radius: 4px;
                     }
                     .name {
                         color: #666;
-                        flex: 1;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
                     }
                     .size {
-                        background: #f5f5f5;
+                        background: #e3f2fd;
                         padding: 4px 8px;
-                        border-radius: 3px;
-                        min-width: 60px;
+                        border-radius: 4px;
                         text-align: center;
+                        color: #1976D2;
                     }
                     .quantity {
-                        min-width: 60px;
                         text-align: center;
+                        background: #f5f5f5;
+                        padding: 4px 8px;
+                        border-radius: 4px;
                     }
-                    .price {
+                    .price, .cost {
                         color: #f44336;
                         font-weight: bold;
-                        min-width: 80px;
                         text-align: right;
+                        padding: 4px 8px;
+                        background: #fff3f0;
+                        border-radius: 4px;
+                    }
+                    .cost {
+                        color: #4CAF50;
+                        background: #E8F5E9;
+                    }
+                    .supplier {
+                        color: #2196F3;
+                        font-size: 13px;
+                        padding: 4px 8px;
+                        background: #e3f2fd;
+                        border-radius: 4px;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                    }
+                    .remark {
+                        color: #666;
+                        font-style: italic;
+                        padding: 4px 8px;
+                        background: #fff;
+                        border-radius: 4px;
+                        border: 1px solid #eee;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
                     }
                     .time {
                         color: #999;
-                        min-width: 100px;
-                        text-align: right;
-                    }
-                    .search-bar {
-                        margin: 20px 0;
-                        padding: 10px;
-                        background: #f8f9fa;
-                        border-radius: 4px;
-                    }
-                    .search-input {
-                        width: 100%;
-                        padding: 8px;
-                        border: 1px solid #ddd;
-                        border-radius: 4px;
-                        font-size: 14px;
+                        font-size: 13px;
+                        white-space: nowrap;
                     }
                     .delete-btn {
-                        padding: 4px 8px;
+                        padding: 6px 12px;
                         background: #ff4444;
                         color: white;
                         border: none;
                         border-radius: 4px;
                         cursor: pointer;
+                        transition: background-color 0.2s;
                     }
                     .delete-btn:hover {
                         background: #cc0000;
                     }
-                    /* 添加可编辑元素的样式 */
+                    .search-bar {
+                        background: white;
+                        padding: 15px;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        margin-bottom: 20px;
+                        display: flex;
+                        gap: 10px;
+                        align-items: center;
+                    }
+                    .search-input {
+                        flex: 1;
+                        padding: 10px;
+                        border: 1px solid #ddd;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        transition: border-color 0.2s;
+                    }
+                    .search-input:focus {
+                        outline: none;
+                        border-color: #2196F3;
+                    }
                     .editable {
                         cursor: text;
-                        padding: 2px 4px;
-                        border-radius: 3px;
-                        min-width: 30px;
+                        transition: all 0.2s;
                     }
                     .editable:hover {
                         background: #f0f0f0;
@@ -3100,57 +3155,78 @@ function updateSupplierNav() {
                         outline: 2px solid #2196F3;
                         outline-offset: -2px;
                     }
-
-                    /* 加选择样式 */
                     .select-checkbox {
                         width: 18px;
                         height: 18px;
-                        margin-right: 10px;
                         cursor: pointer;
                     }
-
                     .batch-actions {
                         position: fixed;
                         bottom: 20px;
                         left: 50%;
                         transform: translateX(-50%);
                         background: white;
-                        padding: 10px 20px;
+                        padding: 15px 25px;
                         border-radius: 8px;
-                        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
                         display: none;
                         align-items: center;
-                        gap: 10px;
+                        gap: 15px;
                         z-index: 1000;
                     }
-
                     .batch-actions.active {
                         display: flex;
                     }
-
+                    .batch-actions .count {
+                        color: #666;
+                        font-size: 14px;
+                    }
                     .batch-delete-btn {
                         background: #ff4444;
                         color: white;
                         border: none;
-                        padding: 8px 16px;
+                        padding: 8px 20px;
                         border-radius: 4px;
                         cursor: pointer;
+                        font-size: 14px;
+                        transition: background-color 0.2s;
                     }
-
                     .batch-cancel-btn {
-                        background: #999;
+                        background: #9e9e9e;
                         color: white;
                         border: none;
-                        padding: 8px 16px;
+                        padding: 8px 20px;
                         border-radius: 4px;
                         cursor: pointer;
+                        font-size: 14px;
+                        transition: background-color 0.2s;
                     }
-
-                    .select-all-checkbox {
-                        margin-right: 10px;
+                    .batch-delete-btn:hover {
+                        background: #d32f2f;
+                    }
+                    .batch-cancel-btn:hover {
+                        background: #757575;
+                    }
+                    .header-row {
+                        display: grid;
+                        grid-template-columns: 30px 120px 120px minmax(100px, 1fr) 80px 80px 80px 80px 120px 150px 100px 80px;
+                        gap: 12px;
+                        padding: 12px 15px;
+                        background: #f5f5f5;
+                        font-weight: bold;
+                        border-bottom: 2px solid #ddd;
+                    }
+                    .header-cell {
+                        color: #666;
+                        font-size: 13px;
+                        text-transform: uppercase;
                     }
                 </style>
                 <script>
+                    // 初始化选中的订单集合
+                    let selectedOrders = new Set();
+                    let orderData = ${JSON.stringify(orders)};
+
                     function searchOrders() {
                         const searchText = document.getElementById('searchInput').value.toLowerCase();
                         const orders = document.querySelectorAll('.order-item');
@@ -3161,41 +3237,53 @@ function updateSupplierNav() {
                         });
                     }
 
-                    function deleteOrder(orderId) {
-                        if (confirm('确定要删除这条订单记录吗？')) {
-                            const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
-                            delete orderData[orderId];
-                            localStorage.setItem('orderData', JSON.stringify(orderData));
-                            
-                            // 通知父窗口更新
-                            if (window.opener && !window.opener.closed) {
-                                window.opener.updateRecentOrders();
-                            }
-                            
-                            // 刷新当前页面
-                            location.reload();
-                        }
-                    }
-
-                    // 添加更新订单字段的函数
                     function updateOrderField(orderId, field, value) {
-                        const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
-                        if (orderData[orderId]) {
-                            if (field === 'price') {
-                                value = value.replace('¥', '').trim();
-                            }
-                            orderData[orderId][field] = value.trim();
-                            localStorage.setItem('orderData', JSON.stringify(orderData));
+                        try {
+                            // 发送消息到父窗口更新数据
+                            window.opener.postMessage({
+                                type: 'updateOrder',
+                                orderId: orderId,
+                                field: field,
+                                value: value.trim()
+                            }, '*');
                             
-                            // 通知父窗口更新
-                            if (window.opener && !window.opener.closed) {
-                                window.opener.updateRecentOrders();
+                            // 更新本地显示
+                            const order = orderData.find(o => o.id === orderId);
+                            if (order) {
+                                order[field] = value.trim();
                             }
+                            
+                            // 刷新显示
+                            location.reload();
+                        } catch (error) {
+                            console.error('更新字段失败:', error);
+                            alert('更新失败: ' + error.message);
                         }
                     }
 
-                    // 添加选择相关的函数
-                    let selectedOrders = new Set();
+                    function deleteOrder(orderId) {
+                        if (!orderId) {
+                            console.error('未提供订单ID');
+                            return;
+                        }
+
+                        if (confirm('确定要删除这条订单记录吗？')) {
+                            try {
+                                // 发送消息到父窗口删除数据
+                                window.opener.postMessage({
+                                    type: 'deleteOrder',
+                                    orderId: orderId
+                                }, '*');
+                                
+                                // 更新本地显示
+                                orderData = orderData.filter(order => order.id !== orderId);
+                                location.reload();
+                            } catch (error) {
+                                console.error('删除订单失败:', error);
+                                alert('删除失败: ' + error.message);
+                            }
+                        }
+                    }
 
                     function toggleSelect(orderId, checkbox) {
                         if (checkbox.checked) {
@@ -3211,10 +3299,12 @@ function updateSupplierNav() {
                         allCheckboxes.forEach(cb => {
                             cb.checked = checkbox.checked;
                             const orderId = cb.getAttribute('data-id');
-                            if (checkbox.checked) {
-                                selectedOrders.add(orderId);
-                            } else {
-                                selectedOrders.delete(orderId);
+                            if (orderId) {
+                                if (checkbox.checked) {
+                                    selectedOrders.add(orderId);
+                                } else {
+                                    selectedOrders.delete(orderId);
+                                }
                             }
                         });
                         updateBatchActions();
@@ -3240,21 +3330,35 @@ function updateSupplierNav() {
                     }
 
                     function batchDeleteOrders() {
-                        if (!confirm(\`确定要删除选中的 \${selectedOrders.size} 条订单吗？\`)) {
+                        if (selectedOrders.size === 0) {
+                            alert('请先选择要删除的订单');
                             return;
                         }
 
-                        const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
-                        selectedOrders.forEach(orderId => {
-                            delete orderData[orderId];
-                        });
-                        localStorage.setItem('orderData', JSON.stringify(orderData));
-
-                        if (window.opener && !window.opener.closed) {
-                            window.opener.updateRecentOrders();
+                        if (confirm(\`确定要删除选中的 \${selectedOrders.size} 条订单吗？\`)) {
+                            try {
+                                // 发送消息到父窗口批量删除数据
+                                window.opener.postMessage({
+                                    type: 'batchDeleteOrders',
+                                    orderIds: Array.from(selectedOrders)
+                                }, '*');
+                                
+                                // 更新本地显示
+                                orderData = orderData.filter(order => !selectedOrders.has(order.id));
+                                selectedOrders.clear();
+                                location.reload();
+                            } catch (error) {
+                                console.error('批量删除失败:', error);
+                                alert('批量删除失败: ' + error.message);
+                            }
                         }
-                        location.reload();
                     }
+
+                    // 页面加载完成后初始化
+                    document.addEventListener('DOMContentLoaded', function() {
+                        // 初始化批量操作区域
+                        updateBatchActions();
+                    });
                 </script>
             </head>
             <body>
@@ -3269,6 +3373,20 @@ function updateSupplierNav() {
                            oninput="searchOrders()">
                 </div>
                 <div class="order-list">
+                    <div class="header-row">
+                        <div class="header-cell"></div>
+                        <div class="header-cell">客户</div>
+                        <div class="header-cell">商品编码</div>
+                        <div class="header-cell">商品名称</div>
+                        <div class="header-cell">尺码</div>
+                        <div class="header-cell">数量</div>
+                        <div class="header-cell">成本</div>
+                        <div class="header-cell">售价</div>
+                        <div class="header-cell">供应商</div>
+                        <div class="header-cell">备注</div>
+                        <div class="header-cell">时间</div>
+                        <div class="header-cell">操作</div>
+                    </div>
                     ${orders.map(order => `
                         <div class="order-item">
                             <input type="checkbox" 
@@ -3277,22 +3395,39 @@ function updateSupplierNav() {
                                    onclick="toggleSelect('${order.id}', this)">
                             <span class="customer editable" 
                                   contenteditable="true" 
-                                  onblur="updateOrderField('${order.id}', 'customer', this.textContent)">${order.customer || '未填写'}</span>
-                            <div class="product-info">
-                                <span class="code">${order.code}</span>
-                                <span class="name">${order.name || '-'}</span>
-                                <span class="size editable" 
-                                      contenteditable="true" 
-                                      onblur="updateOrderField('${order.id}', 'size', this.textContent)">${order.size || '-'}</span>
-                                <span class="quantity editable"
-                                      contenteditable="true"
-                                      onblur="updateOrderField('${order.id}', 'quantity', this.textContent)">×${order.quantity}</span>
-                            </div>
+                                  onblur="updateOrderField('${order.id}', 'customer', this.textContent)"
+                                  title="点击编辑客户名称">${order.customer || '未填写'}</span>
+                            <span class="code editable" 
+                                  contenteditable="true" 
+                                  onblur="updateOrderField('${order.id}', 'code', this.textContent)"
+                                  title="点击编辑商品编码">${order.code}</span>
+                            <span class="name" title="商品名称">${order.name || '-'}</span>
+                            <span class="size editable" 
+                                  contenteditable="true" 
+                                  onblur="updateOrderField('${order.id}', 'size', this.textContent)"
+                                  title="点击编辑尺码">${order.size || '-'}</span>
+                            <span class="quantity editable"
+                                  contenteditable="true"
+                                  onblur="updateOrderField('${order.id}', 'quantity', this.textContent)"
+                                  title="点击编辑数量">×${order.quantity}</span>
+                            <span class="cost editable"
+                                  contenteditable="true"
+                                  onblur="updateOrderField('${order.id}', 'cost', this.textContent)"
+                                  title="点击编辑成本">${order.cost || '-'}</span>
                             <span class="price editable" 
                                   contenteditable="true" 
-                                  onblur="updateOrderField('${order.id}', 'price', this.textContent)">¥${order.price || '-'}</span>
+                                  onblur="updateOrderField('${order.id}', 'price', this.textContent)"
+                                  title="点击编辑价格">${order.price || '-'}</span>
+                            <span class="supplier editable"
+                                  contenteditable="true"
+                                  onblur="updateOrderField('${order.id}', 'supplier', this.textContent)"
+                                  title="点击编辑供应商">${order.supplier || '未设置供应商'}</span>
+                            <span class="remark editable"
+                                  contenteditable="true"
+                                  onblur="updateOrderField('${order.id}', 'remark', this.textContent)"
+                                  title="点击添加备注">${order.remark || ''}</span>
                             <span class="time">${new Date(order.timestamp).toLocaleTimeString()}</span>
-                            <button class="delete-btn" onclick="deleteOrder('${order.id}')">删除</button>
+                            <button class="delete-btn" onclick="deleteOrder('${order.id}')" title="删除订单">删除</button>
                         </div>
                     `).join('')}
                 </div>
@@ -3307,8 +3442,46 @@ function updateSupplierNav() {
 
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        const newWindow = window.open(url, '_blank');
         setTimeout(() => URL.revokeObjectURL(url), 100);
+
+        // 添加消息监听器处理来自新窗口的请求
+        window.addEventListener('message', function(event) {
+            try {
+                const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
+                
+                switch(event.data.type) {
+                    case 'updateOrder':
+                        const { orderId, field, value } = event.data;
+                        if (orderData[orderId]) {
+                            orderData[orderId][field] = value;
+                            localStorage.setItem('orderData', JSON.stringify(orderData));
+                            updateRecentOrders();
+                        }
+                        break;
+                        
+                    case 'deleteOrder':
+                        if (orderData[event.data.orderId]) {
+                            delete orderData[event.data.orderId];
+                            localStorage.setItem('orderData', JSON.stringify(orderData));
+                            updateRecentOrders();
+                        }
+                        break;
+                        
+                    case 'batchDeleteOrders':
+                        event.data.orderIds.forEach(orderId => {
+                            if (orderData[orderId]) {
+                                delete orderData[orderId];
+                            }
+                        });
+                        localStorage.setItem('orderData', JSON.stringify(orderData));
+                        updateRecentOrders();
+                        break;
+                }
+            } catch (error) {
+                console.error('处理窗口消息失败:', error);
+            }
+        });
     }
 
     // 设置导出日期为当前日期
@@ -3830,4 +4003,349 @@ function updateSupplierNav() {
             closeZoomedImage();
         }
     });
+
+    // 从 IndexedDB 删除图片
+    async function deleteImageFromDB(uniqueId) {
+        await ensureDBConnection();
+        return new Promise((resolve, reject) => {
+            try {
+                const transaction = db.transaction(['images'], 'readwrite');
+                const store = transaction.objectStore('images');
+                
+                const request = store.delete(uniqueId);
+                
+                request.onsuccess = () => {
+                    console.log('图片删除成功:', uniqueId);
+                    resolve();
+                };
+                
+                request.onerror = () => {
+                    console.error('删除图片失败:', request.error);
+                    reject(request.error);
+                };
+            } catch (error) {
+                console.error('删除图片事务失败:', error);
+                reject(error);
+            }
+        });
+    }
+
+    // 修改登录检查函数
+    function checkLoginStatus() {
+        const isLoggedIn = sessionStorage.getItem('isLoggedIn'); // 改用 sessionStorage
+        const loginOverlay = document.getElementById('loginOverlay');
+        const container = document.querySelector('.container');
+
+        if (!isLoggedIn) {
+            if (loginOverlay) {
+                loginOverlay.style.display = 'flex';
+            }
+            if (container) {
+                container.style.display = 'none';
+            }
+        } else {
+            if (loginOverlay) {
+                loginOverlay.style.display = 'none';
+            }
+            if (container) {
+                container.style.display = 'block';
+            }
+        }
+    }
+
+    // 修改登录处理函数
+    function handleLogin(event) {
+        event.preventDefault();
+        
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        
+        if (username === 'admin' && password === 'admin123') {
+            sessionStorage.setItem('isLoggedIn', 'true'); // 改用 sessionStorage
+            document.getElementById('loginOverlay').style.display = 'none';
+            // 显示主容器
+            const container = document.querySelector('.container');
+            if (container) {
+                container.style.display = 'block';
+            }
+            // 初始化系统
+            initializeSystem();
+        } else {
+            const errorDiv = document.querySelector('.login-error');
+            if (!errorDiv) {
+                const error = document.createElement('div');
+                error.className = 'login-error';
+                error.textContent = '用户名或密码错误';
+                document.getElementById('loginForm').appendChild(error);
+            }
+            errorDiv.style.display = 'block';
+        }
+        
+        return false;
+    }
+
+    // 修改登出函数
+    function logout() {
+        sessionStorage.removeItem('isLoggedIn'); // 改用 sessionStorage
+        location.reload(); // 刷新页面，重新加载登录状态
+    }
+
+    // 将系统初始化代码封装成函数
+    async function initializeSystem() {
+        try {
+            // 检查浏览器支持
+            if (!window.indexedDB) {
+                throw new Error('您的浏览器不支持 IndexedDB，请使用现代浏览器');
+            }
+
+            console.log('开始初始化系统...');
+            
+            // 初始化数据库
+            await initDB();
+            
+            // 初始化其他功能
+            const initFunctions = [
+                { name: 'initializeImageUpload', fn: initializeImageUpload },
+                { name: 'initializeForms', fn: initializeForms },
+                { name: 'initializeExcelImport', fn: initializeExcelImport },
+                { name: 'initializeFolderInput', fn: initializeFolderInput },
+                { name: 'initializeDragAndDrop', fn: initializeDragAndDrop },
+                { name: 'initializeProductEditForm', fn: initializeProductEditForm },
+                { name: 'initializeGridColumns', fn: initializeGridColumns },
+                { name: 'initializeNewItemForm', fn: initializeNewItemForm }  // 添加这一行
+            ];
+
+            for (const { name, fn } of initFunctions) {
+                try {
+                    await fn();
+                } catch (error) {
+                    console.error(`${name} 初始化失败:`, error);
+                }
+            }
+
+            await updateImageGrid();
+
+        } catch (error) {
+            console.error('系统初始化失败:', error);
+            alert('系统初始化失败，请刷新页面重试');
+        }
+    }
+
+    // 页面加载时的处理
+    document.addEventListener('DOMContentLoaded', () => {
+        // 首先检查登录状态
+        checkLoginStatus();
+        
+        // 如果已登录，则初始化系统
+        if (sessionStorage.getItem('isLoggedIn')) { // 改用 sessionStorage
+            initializeSystem();
+        }
+    });
+
+    // 修改新款图片上传处理函数
+    async function handleNewItemImageSelect(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            console.log('没有选择文件');
+            return;
+        }
+
+        try {
+            console.log('开始处理图片...');
+            
+            // 检查文件类型
+            if (!file.type.startsWith('image/')) {
+                throw new Error('请选择图片文件');
+            }
+
+            // 获取文件名（不包括扩展名）并设置为商品编码
+            const fileName = file.name.replace(/\.[^/.]+$/, ""); // 移除扩展名
+            const codeInput = document.getElementById('newItemCode');
+            if (codeInput) {
+                codeInput.value = fileName;
+            }
+
+            // 显示预览
+            const preview = document.getElementById('newItemPreview');
+            if (!preview) {
+                throw new Error('找不到预览元素');
+            }
+
+            // 先用 FileReader 显示预览
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+
+            // 压缩图片
+            console.log('开始压缩图片...');
+            const compressedImageUrl = await compressImage(file, 200);
+            console.log('图片压缩完成');
+
+            // 更新预览为压缩后的图片
+            preview.src = compressedImageUrl;
+            
+            // 存储图片数据以供后续使用
+            const form = document.getElementById('newProductForm');
+            if (form) {
+                form.dataset.imageData = compressedImageUrl;
+            }
+            
+            console.log('新款图片处理完成');
+        } catch (error) {
+            console.error('处理新款图片失败:', error);
+            alert('处理图片失败: ' + error.message);
+        }
+    }
+
+    // 修改初始化新款表单函数
+    function initializeNewItemForm() {
+        console.log('开始初始化新款表单...');
+        
+        // 初始化图片上传
+        const imageInput = document.getElementById('newItemImage');
+        if (imageInput) {
+            imageInput.addEventListener('change', handleNewItemImageSelect);
+            console.log('新款图片上传监听器已添加');
+        } else {
+            console.error('找不到新款图片上传输入框');
+        }
+
+        // 初始化表单提交
+        const form = document.getElementById('newProductForm');
+        if (form) {
+            form.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                
+                // 获取表单数据
+                const formData = {
+                    code: document.getElementById('newItemCode').value,
+                    name: document.getElementById('newItemName').value,
+                    supplier: document.getElementById('newItemSupplier').value,
+                    cost: document.getElementById('newItemCost').value,
+                    price: document.getElementById('newItemPrice').value,
+                    size: document.getElementById('newItemSize').value,
+                    remark: document.getElementById('newItemRemark').value,
+                    image: form.dataset.imageData
+                };
+
+                try {
+                    // 保存到数据库
+                    await saveNewItem(formData);
+                    
+                    // 关闭表单
+                    closeNewItemForm();
+                    
+                    // 刷新商品列表
+                    await updateImageGrid();
+                    
+                    alert('新款添加成功！');
+                } catch (error) {
+                    console.error('保存新款失败:', error);
+                    alert('保存失败: ' + error.message);
+                }
+            });
+            console.log('新款表单提交监听器已添加');
+        } else {
+            console.error('找不到新款表单');
+        }
+    }
+
+    // 添加保存新款的函数
+    async function saveNewItem(formData) {
+        try {
+            const db = await initDB();
+            const tx = db.transaction(['images'], 'readwrite');
+            const store = tx.objectStore('images');
+
+            // 检查是否已存在相同的商品编码和供应商组合
+            const cursor = await store.openCursor();
+            let existingProduct = null;
+
+            while (cursor) {
+                if (cursor.value.code === formData.code && 
+                    cursor.value.supplier === formData.supplier) {
+                    existingProduct = cursor.value;
+                    break;
+                }
+                await cursor.continue();
+            }
+
+            if (existingProduct) {
+                // 如果存在，询问用户是否覆盖
+                if (!confirm('该商品和供应商组合已存在，是否覆盖？')) {
+                    throw new Error('用户取消保存');
+                }
+                // 如果用户确认覆盖，则删除旧记录
+                await store.delete(existingProduct.id);
+            }
+
+            // 准备要保存的数据
+            const productData = {
+                code: formData.code,
+                name: formData.name || '',
+                supplier: formData.supplier || '',
+                cost: formData.cost || '',
+                price: formData.price || '',
+                size: formData.size || '',
+                remark: formData.remark || '',
+                file: formData.image,
+                timestamp: new Date().toISOString()
+            };
+
+            // 保存到数据库
+            await store.add(productData);
+            await tx.complete;
+            
+            console.log('新款保存成功');
+        } catch (error) {
+            console.error('保存新款到数据库失败:', error);
+            throw error;
+        }
+    }
+
+    function deleteOrder(orderId) {
+        if (confirm('确定要删除这条订单记录吗？')) {
+            const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
+            delete orderData[orderId];
+            localStorage.setItem('orderData', JSON.stringify(orderData));
+            
+            // 更新父窗口的最近订单显示
+            if (window.opener && !window.opener.closed) {
+                window.opener.updateRecentOrders();
+            }
+            
+            // 刷新当前页面
+            location.reload();
+        }
+    }
+
+    function batchDeleteOrders() {
+        const selectedOrders = document.querySelectorAll('.select-checkbox:checked');
+        if (selectedOrders.length === 0) {
+            alert('请先选择要删除的订单');
+            return;
+        }
+
+        if (confirm(`确定要删除选中的 ${selectedOrders.length} 条订单记录吗？`)) {
+            const orderData = JSON.parse(localStorage.getItem('orderData') || '{}');
+            
+            selectedOrders.forEach(checkbox => {
+                const orderId = checkbox.dataset.id;
+                delete orderData[orderId];
+            });
+            
+            localStorage.setItem('orderData', JSON.stringify(orderData));
+            
+            // 更新父窗口的最近订单显示
+            if (window.opener && !window.opener.closed) {
+                window.opener.updateRecentOrders();
+            }
+            
+            // 刷新当前页面
+            location.reload();
+        }
+    }
  
