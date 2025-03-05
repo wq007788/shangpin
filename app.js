@@ -2970,9 +2970,24 @@ function updateSupplierNav() {
                 window.opener.updateRecentOrders();
             }
             
-            // 如果在全部订单页面，刷新当前页面
+            // 只在全部订单页面更新显示，而不是刷新整个页面
             if (document.querySelector('.order-list')) {
-                location.reload();
+                updateOrderDisplay(orderId, field, value);
+            }
+        }
+    }
+
+    // 添加新函数来更新订单显示
+    function updateOrderDisplay(orderId, field, value) {
+        const orderElement = document.querySelector(`[data-id="${orderId}"]`);
+        if (orderElement) {
+            const fieldElement = orderElement.querySelector(`.${field}`);
+            if (fieldElement) {
+                if (field === 'price') {
+                    fieldElement.textContent = `¥${value}`;
+                } else {
+                    fieldElement.textContent = value;
+                }
             }
         }
     }

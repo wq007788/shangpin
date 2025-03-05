@@ -1995,34 +1995,6 @@
                 scrollTop.classList.remove('visible');
             }
         });
-
-        // 双击保存功能
-        document.querySelectorAll('.supplier-section').forEach(section => {
-            section.addEventListener('dblclick', async function() {
-                try {
-                    const canvas = await html2canvas(this, {
-                        scale: 2,
-                        useCORS: true,
-                        logging: false,
-                        backgroundColor: '#ffffff'
-                    });
-
-                    canvas.toBlob(async blob => {
-                        try {
-                            const item = new ClipboardItem({ 'image/png': blob });
-                            await navigator.clipboard.write([item]);
-                            alert('已复制到剪贴板！');
-                        } catch (error) {
-                            console.error('复制到剪贴板失败:', error);
-                            alert('复制到剪贴板失败，请检查浏览器权限设置。\n\n请确保已授予网站剪贴板访问权限。');
-                        }
-                    });
-                } catch (error) {
-                    console.error('生成图片失败:', error);
-                    alert('生成图片失败: ' + error.message);
-                }
-            });
-        });
     </script>
 </body>
 </html> 
